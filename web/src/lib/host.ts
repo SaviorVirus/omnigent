@@ -100,6 +100,7 @@ export type OmnigentAnalyticsEvent =
  * access to the host app. Expose the content iframe before forwarding every load.
  */
 export interface HtmlPreviewFrameProps {
+  /** Prepared HTML includes an inline comment bridge; the frame's CSP must allow it. */
   htmlContent: string;
   iframeRef: Ref<HTMLIFrameElement>;
   onLoad: () => void;
@@ -231,6 +232,11 @@ export function getOmnigentHostGeneration(): number {
  */
 export function isDatabricksWorkspace(): boolean {
   return hostConfig.fetcher != null || import.meta.env.VITE_DATABRICKS_WORKSPACE === "true";
+}
+
+/** Whether the deployment routes host and runner traffic by host ID. */
+export function isHostRoutingEnabled(): boolean {
+  return isDatabricksWorkspace() || import.meta.env.VITE_OMNIGENT_HOST_ROUTING === "true";
 }
 
 /**
