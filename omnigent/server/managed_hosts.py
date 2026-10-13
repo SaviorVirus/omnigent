@@ -173,7 +173,7 @@ import re
 import secrets
 import time
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from functools import partial
@@ -625,6 +625,9 @@ class ManagedSandboxConfig:
     :param agent_images: Built-in agent name → runner image from
         ``sandbox.kubernetes.agents``; empty for other providers. Kept here
         only so startup can warn about names that match no built-in agent.
+    :param default_model_options: Optional, request-scoped provider catalog used
+        when no host catalog is available for the selected harness and user.
+        Supplies choices without selecting a default or provisioning a host.
     """
 
     server_url: str
@@ -636,6 +639,9 @@ class ManagedSandboxConfig:
     model_discovery: dict[str, object] = dataclass_field(default_factory=dict)
     git_clone: GitCloneOptions = dataclass_field(default_factory=GitCloneOptions)
     agent_images: dict[str, str] = dataclass_field(default_factory=dict)
+    default_model_options: Callable[[str, str | None], Awaitable[list[dict[str, Any]]]] | None = (
+        None
+    )
 
 
 @dataclass(frozen=True)
@@ -805,9 +811,19 @@ class ManagedSandboxDeployment:
                 launcher = config.launcher_factory()
                 caps[config.provider] = {"multi_repo": launcher.capabilities.multi_repo}
                 from omnigent.inference_config import parse_inference_config
+                from omnigent.server.inference_catalog import ambient_gateway_providers
 
-                if parse_inference_config(config.host_config or {}):
+                try:
+                    bound = bool(parse_inference_config(config.host_config or {}))
+                except ValueError:
+                    # Startup rejects malformed YAML; a programmatic target advertises no catalog.
+                    bound = False
+                if bound:
                     caps[config.provider]["inference_models"] = True
+                elif config.default_model_options is not None or ambient_gateway_providers(
+                    config.host_config, config.model_discovery
+                ):
+                    caps[config.provider]["default_models"] = True
         return caps
 
 
